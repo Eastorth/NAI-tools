@@ -1,21 +1,63 @@
 @echo off
-chcp 65001 >nul
 cd /d "%~dp0"
-title NAI èµ„æºåº“
+title NAI ×ÊÔ´¿â
+set PYTHONIOENCODING=utf-8
 
-set "PY=python"
+rem ============================================================
+rem  ÌôÒ»¸ö×°ÁË Pillow µÄ Python ÔÙÆô¶¯¡£
+rem  PATH ÀïµÚÒ»¸ö python Î´±Ø×°ÁËÒÀÀµ£¬Ö±½ÓÓÃ»á±¨
+rem  ModuleNotFoundError: No module named 'PIL' È»ºóÉÁÍË¡£
+rem
+rem  !! ±¾ÎÄ¼þ±ØÐëÒÔ GBK ´æ´¢£¬²»ÄÜ´æ³É UTF-8 !!
+rem  cmd.exe °´ÏµÍ³´úÂëÒ³¶ÁÅú´¦Àí£¬UTF-8 µÄÖÐÎÄ»á±»²ð»µÕûÐÐ¡£
+rem ============================================================
+
+set "BUNDLED=C:\Users\Administrator\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\python\python.exe"
+
+set "PY="
+
+rem ---- 1) PATH ÀïµÄ python£¬Ç°ÌáÊÇÄÜ import PIL ----
 where python >nul 2>nul
-if errorlevel 1 set "PY=C:\Users\Administrator\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\python\python.exe"
+if errorlevel 1 goto try_bundled
+python -c "import PIL" >nul 2>nul
+if errorlevel 1 goto try_bundled
+set "PY=python"
+goto run
 
+rem ---- 2) ÍË»ØÄÚÖÃÔËÐÐÊ± ----
+:try_bundled
+if not exist "%BUNDLED%" goto no_python
+"%BUNDLED%" -c "import PIL" >nul 2>nul
+if errorlevel 1 goto no_python
+set "PY=%BUNDLED%"
+goto run
+
+rem ---- 3) ¶¼²»ÐÐ£¬Ã÷È·ËµÇå³þÔõÃ´ÐÞ ----
+:no_python
+echo.
+echo  [´íÎó] ÕÒ²»µ½×°ÁË Pillow µÄ Python£¬ÎÞ·¨Æô¶¯¡£
+echo.
+echo  µ±Ç° PATH ÀïµÄ python£º
+where python 2>nul
+echo.
+echo  ½â¾ö°ì·¨£¨ÈÎÑ¡ÆäÒ»£©£º
+echo    1. ¸øÏÖÓÐ Python ×°ÒÀÀµ£º  python -m pip install Pillow
+echo    2. »ò°Ñ¿ÉÓÃµÄ python.exe ÍêÕûÂ·¾¶Ìî½ø±¾ÎÄ¼þµÄ BUNDLED ±äÁ¿
+echo.
+pause
+exit /b 1
+
+:run
 echo ============================================
-echo   NAI èµ„æºåº“
-echo   æµè§ˆå™¨è®¿é—® http://127.0.0.1:8780/
-echo   å…³é—­è¿™ä¸ªçª—å£å³åœæ­¢æœåŠ¡
+echo   NAI ×ÊÔ´¿â
+echo   ½âÊÍÆ÷: %PY%
+echo   ä¯ÀÀÆ÷·ÃÎÊ http://127.0.0.1:8780/
+echo   ¹Ø±ÕÕâ¸ö´°¿Ú¼´Í£Ö¹·þÎñ
 echo ============================================
 echo.
 
 "%PY%" lib_server.py --port 8780 --open
 
 echo.
-echo [æœåŠ¡å·²é€€å‡º] ä¸Šé¢è‹¥æœ‰æŠ¥é”™ä¿¡æ¯è¯·æˆªå›¾ã€‚
+echo [·þÎñÒÑÍË³ö] ÉÏÃæÈôÓÐ±¨´íÐÅÏ¢Çë½ØÍ¼¡£
 pause
