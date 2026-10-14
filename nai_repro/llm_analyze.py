@@ -34,8 +34,8 @@ CACHE_DIR = os.path.join(HERE, "out", "_llm")
 DEFAULT_CONFIG = {
     "backend": "ollama",       # ollama | llamacpp
     "base_url": "http://127.0.0.1:8000",       # Ollama（OLLAMA_HOST=:8000）
-    "model": "orcarouter/Qwen3.8-27B-Uncensored:q4_K_M",
-    "num_ctx": 12288,
+    "model": "lukey03/qwen3.5-9b-abliterated-vision:latest",
+    "num_ctx": 16384,
     "num_predict": 2400,
     "temperature": 0.1,
     "timeout": 900,
@@ -49,13 +49,17 @@ MODES = {
         "system": "SYSTEM",
         "keys": ("overview", "structure", "categories", "characters",
                  "reusable", "insights"),
-        "num_predict": 2400,
+        # 上限不是目标：规矩的模型写完就停，调大零成本；
+        # 爱灌水的模型（qwen3-vl 系实测 full 要 2145 tok）需要足够余量
+        "num_predict": 3200,
         "schema": True,
     },
     "fast": {
         "system": "SYSTEM_FAST",
         "keys": ("overview", "categories", "insights"),
-        "num_predict": 900,
+        # 900 对爱灌水的模型不够：实测 qwen3-vl-4b 在 900 处被截断，
+        # JSON 没闭合直接解析失败
+        "num_predict": 1600,
         "schema": True,
     },
 }
@@ -636,6 +640,11 @@ def validate(obj, n_tags, mode="full"):
         problems.append(f"编号越界 {extra[:8]}")
     if dup:
         problems.append(f"编号重复 {dup[:8]}")
+        # 重叠太严重说明模型压根没在做分类，得让用户看见
+        if len(dup) > max(3, len(want) * 0.5):
+            problems.append(
+                f"分类不可信：{len(dup)}/{len(want)} 个编号被重复分到多个分类，"
+                f"模型（{mode} 模式）没能给出有效分类，建议换更强的模型")
 
     for it in (obj.get("insights") or []):
         if isinstance(it, dict) and it.get("level") not in LEVELS:
@@ -712,8 +721,16 @@ def resolve_refs(values, by_idx):
 
 
 def merge_elements(source_tags, categories):
-    """把模型的编号分类贴回标签，产出 elements[] 与编号→分类映射。"""
-    idx_cat = {}
+    """把模型的编号分类贴回标签，产出 elements[] 与编号→分类映射。
+
+    弱模型会把同一个编号塞进好几个分类（实测 qwen3-vl-4b 每个分类都灌
+    39~59 个、几乎全重叠）。这时候「首次优先」会把垃圾全倒进第一个分类，
+    比不分类还糟。所以：
+        出现在 1 个分类  -> 采用
+        出现在 2 个分类  -> 取先出现的那个（轻微歧义）
+        出现在 3 个以上  -> 视为没表态，归入「其他」
+    """
+    hits = {}
     for cat, items in (categories or {}).items():
         if not isinstance(items, list):
             continue
@@ -721,7 +738,15 @@ def merge_elements(source_tags, categories):
             n = v if isinstance(v, int) and not isinstance(v, bool) else (
                 int(v.strip()) if isinstance(v, str) and v.strip().isdigit() else None)
             if n is not None:
-                idx_cat.setdefault(n, cat)
+                hits.setdefault(n, []).append(cat)
+
+    idx_cat = {}
+    for n, cats in hits.items():
+        if len(cats) == 1:
+            idx_cat[n] = cats[0]
+        elif len(cats) == 2:
+            idx_cat[n] = cats[0]
+        # >=3 个分类：模型自相矛盾，不给分类
 
     elements, unassigned = [], []
     for tg in source_tags:
@@ -748,11 +773,17 @@ def merge_elements(source_tags, categories):
 
 # ---------------------------------------------------------------- 主流程
 
+# 结果后处理逻辑的版本。改动 validate / merge_elements / 兜底这些东西时
+# 必须往上加，否则缓存里存的是按老规则算出来的结果，用户看不到新行为。
+POSTPROC_VERSION = "2"
+
+
 def cache_path(slots, cfg, mode):
     h = hashlib.sha1()
     for s in slots:
         h.update((s["slot"] + "\x00" + s["text"] + "\x00").encode("utf-8"))
-    h.update((cfg["model"] + "\x00" + mode).encode("utf-8"))
+    h.update((cfg["model"] + "\x00" + mode
+              + "\x00v" + POSTPROC_VERSION).encode("utf-8"))
     return os.path.join(CACHE_DIR, h.hexdigest()[:20] + ".json")
 
 
@@ -794,30 +825,47 @@ def analyze_prompts(prompts, cfg=None, mode="full", include_chars=True,
                 {"role": "user", "content": build_user_message(slots, src_tags)}]
 
     last_problems, obj, stats, txt = None, None, {}, ""
-    for attempt in range(1 + cfg["retries"]):
+    # 预算是上限不是目标：模型写完就停，调大对规矩的模型零成本，
+    # 但爱灌水的模型（实测 qwen3-vl 系会把几乎所有编号塞进每个分类）
+    # 会把 JSON 撑爆到写不完。所以预算给足，且被截断时翻倍重试。
+    budget = spec["num_predict"]
+    cap = max(budget * 3, 6000)
+    max_attempts = max(1 + cfg["retries"], 3)
+    for attempt in range(max_attempts):
         t0 = time.time()
-        log(f"调用模型（第 {attempt + 1} 次）…")
+        log(f"调用模型（第 {attempt + 1} 次，预算 {budget} tok）…")
         try:
-            txt, stats = chat(cfg, messages, num_predict=spec["num_predict"],
+            txt, stats = chat(cfg, messages, num_predict=budget,
                               schema=json_schema(mode) if spec.get("schema") else None)
         except Exception as e:
             return {"ok": False, "error": f"模型调用失败：{e}"}
+        truncated = bool(stats.get("truncated"))
         obj = extract_json(txt)
         if obj is None:
             problems = ["模型输出不是合法 JSON"]
         else:
             problems = validate(obj, len(src_tags), mode)
+        if truncated:
+            problems = list(problems) + [
+                f"输出被 num_predict={budget} 截断，JSON 不完整"]
         last_problems = problems
         hard = [p for p in problems if p.startswith(HARD_MARKS)]
+        if truncated:
+            hard.append("truncated")     # 截断必须重试，且要给更大预算
 
         elapsed = time.time() - t0
         log(f"  {elapsed:.1f}s · {stats.get('eval_count')} tok · "
             f"{stats.get('tok_per_s')} tok/s"
             + ("" if not problems else f" · {problems[0][:80]}"))
         # 没有硬错误就接受（漏个别编号之类不值得再烧两分钟）
-        if not hard:
+        if not hard or attempt == max_attempts - 1:
             break
-        if attempt < cfg["retries"]:
+
+        if truncated and budget < cap:
+            # 重发同样的提示没用，得先把预算提上去
+            budget = min(budget * 2, cap)
+            log(f"  被截断，预算提到 {budget} tok 重试")
+        else:
             messages = messages[:2] + [
                 {"role": "assistant", "content": txt[:4000]},
                 {"role": "user", "content":
@@ -840,10 +888,18 @@ def analyze_prompts(prompts, cfg=None, mode="full", include_chars=True,
         for f in ("appearance", "clothing", "accessories", "expression", "action"):
             c2[f] = resolve_refs(ch.get(f), by_idx)
         chars.append(c2)
-    if stats.get("truncated"):
-        last_problems = list(last_problems or []) + [
-            f"输出被 num_predict 截断（{stats.get('eval_count')} tok），"
-            f"部分字段可能缺失"]
+    # 标题兜底：小模型经常把 title 写成空串
+    # （实测 huihui qwen3-vl-abliterated 8b 恒为空），空标题在界面上很难看
+    ov = dict(obj.get("overview") or {})
+    if not str(ov.get("title") or "").strip():
+        picks = [e["text"] for c in ("主体", "场景")
+                 for e in elements if e["category"] == c][:3]
+        if not picks:
+            picks = [e["text"] for e in elements[:3]]
+        if picks:
+            ov["title"] = " · ".join(picks)[:48]
+            ov["title_auto"] = True
+
     result = {
         "ok": True,
         "schema": "nai-prompt-analysis/1",
@@ -856,7 +912,7 @@ def analyze_prompts(prompts, cfg=None, mode="full", include_chars=True,
         "partial": bool(last_problems),
         "unassigned": unassigned,
         "stats": stats,
-        "overview": obj.get("overview") or {},
+        "overview": ov,
         "structure": obj.get("structure") or {},
         "categories": named_cats,
         "categories_by_index": obj.get("categories") or {},
