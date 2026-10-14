@@ -1,0 +1,7 @@
+{
+  "_说明": "复制为 lib_config.json。nai_dir 指向 NAI 复现工具所在目录（它产出 out/ 批次数据）。",
+
+  "nai_dir": "D:\\AI project\\nai_repro",
+  "port": 8780,
+  "host": "127.0.0.1"
+}

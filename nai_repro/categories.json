@@ -1,0 +1,27 @@
+{
+  "_说明": "自定义词典。这里列出的词会被直接归入对应分类，覆盖内置词表。可以随时增删。",
+
+  "画师": [
+    "cutesexyrobutts",
+    "poper (arin sel)",
+    "choujiroo",
+    "tapeworm",
+    "xipa",
+    "blushyspicy",
+    "m-da s-tarou",
+    "wagashi (dagashiya)",
+    "kunaboto",
+    "chomikuplus",
+    "sinensian"
+  ],
+
+  "场景/背景": [
+    "wood bench",
+    "shower room",
+    "changing room"
+  ],
+
+  "视角/空间": [
+    "from below", "from above", "face focus", "cowboy shot", "wide shot"
+  ]
+}

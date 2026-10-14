@@ -1,0 +1,17 @@
+{
+  "_说明": "复制为 llm_config.json 后按需修改。backend 可选 ollama / llamacpp；界面上的下拉会覆盖并写回。",
+
+  "_方案A_质量优先": "Qwen3.8-27B-Uncensored q4_K_M @ Ollama，约 12.4 tok/s，分类完整度 97-100%",
+  "_方案B_速度优先": "Huihui-Spark-X2.5-4B-abliterated Q4_K_M @ llama.cpp，约 185 tok/s，分类完整度 73-81%",
+
+  "backend": "ollama",
+  "base_url": "http://127.0.0.1:8000",
+  "model": "orcarouter/Qwen3.8-27B-Uncensored:q4_K_M",
+
+  "num_ctx": 12288,
+  "num_predict": 2400,
+  "temperature": 0.1,
+  "timeout": 900,
+  "retries": 1,
+  "keep_alive": "30m"
+}

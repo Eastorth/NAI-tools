@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>NAI 资源库</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c232d; --line:#2a323d;
+    --fg:#e6edf3; --dim:#8b949e; --accent:#4c8dff; --ok:#3fb950;
+    --warn:#d29922; --bad:#f85149;
+    --mono:ui-monospace,Consolas,"Cascadia Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--fg);overflow:hidden;
+       font:14px/1.5 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+  button{background:var(--panel2);border:1px solid var(--line);color:var(--fg);
+         border-radius:6px;padding:6px 11px;font-size:12.5px;cursor:pointer;
+         font-family:inherit}
+  button:hover{border-color:var(--accent)}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  button.danger{color:#ffb4b4;border-color:#5a2a2a}
+  input,select{background:var(--panel2);border:1px solid var(--line);color:var(--fg);
+       border-radius:6px;padding:5px 8px;font-size:12.5px;font-family:inherit}
+  input:focus,select:focus{outline:none;border-color:var(--accent)}
+
+  /* ---------- 顶栏 ---------- */
+  header{display:flex;align-items:center;gap:10px;padding:9px 14px;flex-wrap:wrap;
+       background:var(--panel);border-bottom:1px solid var(--line)}
+  header h1{font-size:15px;margin:0;letter-spacing:.02em}
+  header .ver{font-size:11px;color:var(--dim)}
+  header input#q{flex:1;min-width:150px}
+  .spacer{flex:1}
+  .pill{font-size:11.5px;padding:3px 9px;border-radius:99px;background:var(--panel2);
+       border:1px solid var(--line);color:var(--dim)}
+
+  /* ---------- 主体 ---------- */
+  .wrap{display:flex;height:calc(100vh - 47px)}
+  /* 真瀑布流：JS 按最短列投放，滚动到底自动加载下一批 */
+  .grid{flex:1;overflow-y:auto;padding:12px}
+  .cols{display:flex;gap:10px;align-items:flex-start}
+  .col{flex:1;min-width:0;display:flex;flex-direction:column;gap:10px}
+  .tile{position:relative;background:#0b0e13;border:2px solid var(--line);
+       border-radius:8px;overflow:hidden;cursor:pointer;transition:border-color .15s}
+  .tile:hover{border-color:#3a4a5e}
+  .tile.sel{border-color:var(--accent);box-shadow:0 0 0 2px #4c8dff44}
+  .tile img{width:100%;height:auto;display:block;background:#111}
+  .tile .ph{width:100%;background:#12161c}
+  .tile .cap{padding:4px 7px;font-size:10.5px;font-family:var(--mono);
+       color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tile .tags{position:absolute;top:5px;left:5px;display:flex;gap:4px;flex-wrap:wrap}
+  .tile .tg{font-size:9.5px;padding:1px 6px;border-radius:99px;background:#000b;
+       color:#cfe3ff;border:1px solid #34506e}
+  .tile .tg.llm{color:#b9f0c5;border-color:#2c5a38}
+  .tile .ck{position:absolute;top:6px;right:6px;width:18px;height:18px;cursor:pointer;
+       accent-color:var(--accent)}
+  body.blur .tile img{filter:blur(10px)}
+  body.blur .tile:hover img{filter:blur(0)}
+  .more{padding:16px;text-align:center;color:var(--dim);font-size:12px}
+
+  /* ---------- 灯箱（看全图）---------- */
+  .lbox{display:none;position:fixed;inset:0;background:#000d;z-index:70;
+       flex-direction:column}
+  .lbox.on{display:flex}
+  .lboxBar{display:flex;align-items:center;gap:10px;padding:8px 14px;
+       background:#12161ce6;border-bottom:1px solid var(--line);
+       font-size:12px;color:var(--dim);flex-wrap:wrap}
+  .lboxBar b{color:var(--fg);font-family:var(--mono);font-weight:500}
+  .lboxBar .spacer{flex:1}
+  .lboxStage{flex:1;overflow:auto;display:flex;align-items:center;
+       justify-content:center;padding:14px}
+  .lboxStage img{max-width:100%;max-height:100%;object-fit:contain;
+       box-shadow:0 0 40px #000a;background:#0b0e13}
+  .lboxStage.actual{align-items:flex-start;justify-content:flex-start}
+  .lboxStage.actual img{max-width:none;max-height:none;width:auto}
+
+  /* ---------- 详情 ---------- */
+  .side{width:min(580px,46vw);flex:0 0 auto;display:flex;flex-direction:column;
+       border-left:1px solid var(--line);background:var(--panel)}
+  .sideTabs{display:flex;gap:0;border-bottom:1px solid var(--line)}
+  .sideTabs button{border:0;border-radius:0;background:transparent;flex:1;
+       padding:9px 6px;font-size:12.5px;color:var(--dim);border-bottom:2px solid transparent}
+  .sideTabs button.on{color:var(--fg);border-bottom-color:var(--accent)}
+  .sideBody{flex:1;overflow-y:auto;padding:14px 16px}
+  .sideBody img.big{width:100%;border-radius:8px;display:block;cursor:zoom-in;
+       background:#0b0e13}
+  h3{margin:10px 0 3px;font-size:14px;word-break:break-all}
+  .dim{color:var(--dim);font-size:11.5px}
+  .sec{margin-top:15px}
+  .secH{font-size:11.5px;color:var(--dim);border-left:3px solid var(--accent);
+       padding-left:8px;margin-bottom:7px;font-weight:600}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:11.5px;
+       font-family:var(--mono);color:var(--dim)}
+  .kv b{color:var(--fg);font-weight:500;word-break:break-all}
+  pre{margin:0;background:#0b0e13;border:1px solid #1e242c;border-radius:6px;
+       padding:7px 9px;font-family:var(--mono);font-size:11px;color:#b9c3cf;
+       white-space:pre-wrap;word-break:break-word;max-height:190px;overflow:auto}
+  .pblock{margin-top:8px}
+  .pblock>b{display:block;font-size:11px;color:var(--dim);margin-bottom:3px}
+  table{width:100%;border-collapse:collapse;font-size:11.5px;font-family:var(--mono)}
+  th,td{text-align:left;padding:3px 5px;border-bottom:1px solid #1e242c}
+  th{color:var(--dim);font-weight:500}
+  td.v{color:#c9d1d9;max-width:130px;overflow:hidden;text-overflow:ellipsis;
+       white-space:nowrap}
+  .ok{color:var(--ok)} .er{color:var(--bad)}
+  .warnbox{margin:9px 0 0;padding:7px 9px;background:#2a2412;border:1px solid #5a4a2a;
+       border-radius:6px;font-size:11.5px;color:#f0d9a8;line-height:1.5}
+  .row{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  button.mini{font-size:10.5px;padding:2px 9px;border-radius:99px}
+  .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}
+  .chip{font-size:11.5px;font-family:var(--mono);background:#1b2532;
+       border:1px solid #2b3a4d;color:#c9d9ea;border-radius:5px;padding:3px 7px}
+  .chip i{font-style:normal;font-size:10.5px;color:#7fb0e8;margin-left:4px}
+
+  /* ---------- 批次面板 ---------- */
+  .mask{position:fixed;inset:0;background:#000b;display:none;z-index:40}
+  .mask.on{display:block}
+  .sheet{position:absolute;right:0;top:0;bottom:0;width:min(720px,94vw);
+       background:var(--panel);border-left:1px solid var(--line);
+       display:flex;flex-direction:column}
+  .sheetHead{display:flex;align-items:center;gap:10px;padding:12px 16px;
+       border-bottom:1px solid var(--line)}
+  .sheetHead b{flex:1}
+  .sheetBody{flex:1;overflow-y:auto;padding:14px 16px}
+  table.bt{width:100%;border-collapse:collapse;font-size:12px}
+  table.bt th{text-align:left;color:var(--dim);font-weight:500;padding:6px 5px;
+       border-bottom:1px solid var(--line);font-size:11px}
+  table.bt td{padding:7px 5px;border-bottom:1px solid #1e242c;vertical-align:top}
+  table.bt td.act{white-space:nowrap}
+  table.bt button.mini{margin:0 3px 0 0}
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);
+       background:#1c232d;border:1px solid var(--line);border-radius:8px;
+       padding:9px 16px;font-size:12.5px;display:none;z-index:50}
+  .toast.on{display:block}
+</style>
+</head>
+<body class="blur">
+
+<header>
+  <h1>NAI 资源库</h1>
+  <span class="ver" id="srcInfo">…</span>
+  <select id="fBatch" onchange="load()"></select>
+  <select id="fSort" onchange="load()">
+    <option value="time">按时间（新→旧）</option>
+    <option value="name">按作品名</option>
+    <option value="seed">按 seed</option>
+    <option value="batch">按批次</option>
+  </select>
+  <input id="q" placeholder="搜作品名 / seed / 批次">
+  <span class="pill" id="stat">—</span>
+  <div class="spacer"></div>
+  <button onclick="openBatches()">批次管理</button>
+  <button onclick="exportSel()">导出选中</button>
+  <button onclick="toggleBlur(this)">取消模糊</button>
+</header>
+
+<div class="wrap">
+  <div class="grid" id="grid"></div>
+  <div class="side">
+    <div class="sideTabs">
+      <button class="on" data-tab="info" onclick="tab('info')">信息</button>
+      <button data-tab="prompt" onclick="tab('prompt')">提示词</button>
+      <button data-tab="llm" onclick="tab('llm')">LLM 分析</button>
+    </div>
+    <div class="sideBody" id="side">
+      <div class="dim" style="text-align:center;padding:40px 0">点左边任意一张图查看详情</div>
+    </div>
+  </div>
+</div>
+
+<div class="lbox" id="lbox">
+  <div class="lboxBar">
+    <b id="lbName">—</b>
+    <span id="lbInfo"></span>
+    <div class="spacer"></div>
+    <button onclick="lbToggleFit(this)">实际尺寸</button>
+    <button onclick="lbOpenRaw()">新标签看原图</button>
+    <button onclick="lbStep(-1)">← 上一张</button>
+    <button onclick="lbStep(1)">下一张 →</button>
+    <button onclick="closeLbox()">关闭 (Esc)</button>
+  </div>
+  <div class="lboxStage" id="lbStage">
+    <img id="lbImg" src="" alt="">
+  </div>
+</div>
+
+<div class="mask" id="mask">
+  <div class="sheet" onclick="event.stopPropagation()">
+    <div class="sheetHead">
+      <b>批次管理</b>
+      <span class="dim" id="bStat"></span>
+      <button onclick="closeBatches()">关闭</button>
+    </div>
+    <div class="sheetBody" id="bBody"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+let items = [], sel = null, detail = null, tabName = "info", chosen = new Set();
+
+function toast(msg, ms){
+  const t = $("toast");
+  t.textContent = msg; t.classList.add("on");
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("on"), ms || 2600);
+}
+function esc(s){
+  return String(s === null || s === undefined ? "" : s)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;");
+}
+function copy(t){
+  navigator.clipboard.writeText(t || "").then(() => toast("已复制"),
+    () => toast("复制失败，请手动选择"));
+}
+async function post(path, body){
+  const r = await fetch(path, {method:"POST",
+    headers:{"Content-Type":"application/json"}, body: JSON.stringify(body || {})});
+  return await r.json();
+}
+function toggleBlur(btn){
+  document.body.classList.toggle("blur");
+  btn.textContent = document.body.classList.contains("blur") ? "取消模糊" : "模糊原图";
+}
+function tab(name){
+  tabName = name;
+  document.querySelectorAll(".sideTabs button").forEach(b =>
+    b.classList.toggle("on", b.dataset.tab === name));
+  if (detail) renderSide();
+}
+
+/* ---------------- 列表 ---------------- */
+async function load(){
+  const bid = $("fBatch").value;
+  const sort = $("fSort").value;
+  $("grid").innerHTML = '<div class="dim" style="padding:20px">载入中…</div>';
+  try{
+    const r = await fetch(`/api/library?batch=${encodeURIComponent(bid)}&sort=${sort}`);
+    const j = await r.json();
+    if (!j.ok) throw new Error("接口异常");
+    items = j.items || [];
+    const sel = $("fBatch");
+    if (sel.options.length <= 1){
+      sel.innerHTML = `<option value="">全部批次</option>` +
+        (j.batches || []).map(b =>
+          `<option value="${esc(b.id)}">${esc(b.name)}（${b.count}）</option>`).join("");
+    }
+    renderGrid();
+  }catch(e){
+    $("grid").innerHTML = `<div class="dim" style="padding:20px">载入失败：${esc(e.message)}</div>`;
+  }
+}
+
+function filtered(){
+  const s = $("q").value.trim().toLowerCase();
+  if (!s) return items;
+  return items.filter(it => (String(it.work) + " " + it.seed + " " + it.batch_name)
+    .toLowerCase().includes(s));
+}
+
+/* ---------------- 瀑布流 + 滚动加载 ---------------- */
+const PAGE = 40;              // 每批渲染多少张
+let shown = 0, cols = [], pool = [], colH = [], busy = false;
+
+function colCount(){
+  const w = $("grid").clientWidth - 24;
+  return Math.max(2, Math.min(8, Math.floor(w / 220)));
+}
+
+function buildCols(){
+  const g = $("grid");
+  g.innerHTML = "";
+  cols = []; colH = [];
+  // 列装在 .cols 里，哨兵是它下面的普通块，不参与列布局
+  const box = document.createElement("div");
+  box.className = "cols";
+  const n = colCount();
+  for (let i = 0; i < n; i++){
+    const c = document.createElement("div");
+    c.className = "col";
+    box.appendChild(c);
+    cols.push(c); colH.push(0);
+  }
+  g.appendChild(box);
+  // 观察哨：滚到底自动加载下一批
+  const sentinel = document.createElement("div");
+  sentinel.className = "more";
+  sentinel.id = "more";
+  g.appendChild(sentinel);
+  if (io) io.disconnect();
+  io = new IntersectionObserver(es => {
+    if (es.some(e => e.isIntersecting)) appendPage();
+  }, {root: g, rootMargin: "800px"});
+  io.observe(sentinel);
+}
+let io = null;
+
+function shortest(){
+  let k = 0;
+  for (let i = 1; i < colH.length; i++) if (colH[i] < colH[k]) k = i;
+  return k;
+}
+
+function tileHTML(it){
+  const q = `id=${encodeURIComponent(it.batch)}&f=${encodeURIComponent(it.f)}`;
+  const on = sel && sel.batch === it.batch && sel.f === it.f;
+  const ck = chosen.has(it.batch + "/" + it.f) ? "checked" : "";
+  const tg = [];
+  if (it.has_report) tg.push('<span class="tg">已核对</span>');
+  if (it.has_request) tg.push('<span class="tg">有请求</span>');
+  // 先占好高度，避免图片加载完成后瀑布流跳动
+  const ar = (it.w && it.h) ? (it.h / it.w) : 0.75;
+  return `<div class="tile${on ? " sel" : ""}" data-b="${esc(it.batch)}" data-f="${esc(it.f)}">
+    <input class="ck" type="checkbox" ${ck}
+      onclick="event.stopPropagation();pick('${esc(it.batch)}','${esc(it.f)}',this.checked)">
+    <img loading="lazy" src="/img?kind=thumb&${q}&w=320"
+      style="aspect-ratio:${it.w && it.h ? it.w + "/" + it.h : "4/3"}"
+      onclick="select_('${esc(it.batch)}','${esc(it.f)}')">
+    <div class="tags">${tg.join("")}</div>
+    <div class="cap">${esc(it.work)} · ${esc(String(it.seed ?? "?"))}${
+      it.w && it.h ? ` · ${it.w}×${it.h}` : ""}</div>
+  </div>`;
+}
+
+function appendOne(){
+  const it = pool[shown];
+  if (!it) return;
+  const k = shortest();
+  const wrap = document.createElement("div");
+  wrap.innerHTML = tileHTML(it);
+  cols[k].appendChild(wrap.firstElementChild);
+  const cw = cols[k].clientWidth || 200;
+  // 用真实比例估高，图片没加载也能算准，瀑布流不会跳
+  const ar = (it.w && it.h) ? (it.h / it.w) : 0.75;
+  colH[k] += cw * ar + 46;
+  shown++;
+}
+
+function updateMore(){
+  const m = $("more");
+  if (!m) return;
+  m.textContent = shown >= pool.length
+    ? `已全部加载（${pool.length} 张）`
+    : `已显示 ${shown} / ${pool.length} · 继续下滑加载更多…`;
+}
+
+function appendPage(){
+  if (busy || shown >= pool.length) return;
+  busy = true;
+  const end = Math.min(shown + PAGE, pool.length);
+  while (shown < end) appendOne();
+  updateMore();
+  busy = false;
+}
+
+function renderGrid(keepScroll){
+  const list = filtered();
+  $("stat").textContent = `${list.length} / ${items.length} 张`;
+  pool = list; shown = 0;
+  const g = $("grid");
+  const top = keepScroll ? g.scrollTop : 0;
+  buildCols();
+  if (!list.length){
+    g.innerHTML = '<div class="more">没有匹配的图片</div>';
+    return;
+  }
+  appendPage();
+  g.scrollTop = keepScroll ? top : 0;
+}
+
+// 只重排列数，已显示的张数不变
+function relayout(){
+  const g = $("grid");
+  const frac = g.scrollHeight > g.clientHeight
+    ? g.scrollTop / (g.scrollHeight - g.clientHeight) : 0;
+  const keep = shown;
+  pool = filtered();
+  buildCols();
+  shown = 0;
+  while (shown < Math.min(keep, pool.length)) appendOne();
+  updateMore();
+  g.scrollTop = frac * Math.max(0, g.scrollHeight - g.clientHeight);
+}
+
+function pick(bid, f, on){
+  const k = bid + "/" + f;
+  on ? chosen.add(k) : chosen.delete(k);
+}
+
+/* ---------------- 详情 ---------------- */
+async function select_(bid, f){
+  sel = {batch: bid, f};
+  document.querySelectorAll(".tile").forEach(el =>
+    el.classList.toggle("sel", el.dataset.b === bid && el.dataset.f === f));
+  $("side").innerHTML = '<div class="dim" style="padding:20px">读取参数…</div>';
+  try{
+    const r = await fetch(`/api/library/item?batch=${encodeURIComponent(bid)}&f=${encodeURIComponent(f)}`);
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || "读取失败");
+    detail = j.item;
+    renderSide();
+  }catch(e){
+    $("side").innerHTML = `<div class="dim" style="padding:20px">${esc(e.message)}</div>`;
+  }
+}
+
+function renderSide(){
+  const d = detail;
+  if (!d) return;
+  if (tabName === "prompt") return renderPrompt(d);
+  if (tabName === "llm") return renderLLM(d);
+  renderInfo(d);
+}
+
+function imgUrl(d, w){
+  return `/img?kind=thumb&id=${encodeURIComponent(d.batch)}&f=${encodeURIComponent(d.f)}&w=${w}`;
+}
+function fullUrl(d){
+  return `/img?kind=full&id=${encodeURIComponent(d.batch)}&f=${encodeURIComponent(d.f)}`;
+}
+
+function renderInfo(d){
+  const p = d.params || {}, paths = d.paths || {};
+  let h = `<img class="big" id="bigImg" src="${imgUrl(d, 1200)}"
+      title="点一下看全图（Esc 关闭）" onclick="openLbox()">
+    <h3>${esc(d.f)}</h3><div class="dim">${esc(d.batch_name)}</div>
+    <div class="row">
+      <button class="mini" onclick="openLbox()">看全图</button>
+      <button class="mini" onclick="window.open('${fullUrl(d)}','_blank')">新标签看原图</button>
+      <span class="dim" id="bigDims"></span>
+    </div>`;
+
+  h += `<div class="sec"><div class="secH">参数</div><div class="kv">
+    <span>来源</span><b>${esc(d.source || "—")}</b>
+    <span>seed</span><b>${esc(p.seed ?? "—")}</b>
+    <span>采样</span><b>${esc(p.sampler || "—")} · ${esc(p.steps ?? "—")} 步 · CFG ${esc(p.scale ?? "—")}</b>
+    <span>尺寸</span><b>${esc(p.width ?? "—")}×${esc(p.height ?? "—")}</b>
+    <span>schedule</span><b>${esc(p.noise_schedule || "—")} · rescale ${esc(p.cfg_rescale ?? "—")}</b>
+    <span>request</span><b>${esc(p.request_type || "—")}</b>
+    <span>signed_hash</span><b>${esc(String(p.signed_hash || "—").slice(0, 28))}…</b>
+  </div></div>`;
+
+  const c = d.conditioned;
+  if (c && c.any){
+    const bits = [];
+    if ((c.director || []).length) bits.push("Director 参考图");
+    if (c.img2img) bits.push("img2img");
+    if (c.add_original_image) bits.push("原图叠加");
+    if (c.request_type === "NativeInfillingRequest") bits.push("原生局部重绘");
+    h += `<div class="warnbox">原图用过：<b>${bits.map(esc).join(" / ")}</b><br>
+      <span style="color:#b09a6a">图像本体不在元数据里，纯文生图无法复现这部分。</span></div>`;
+  }
+
+  const rep = d.report;
+  if (rep && (rep.check || []).length){
+    const bad = rep.check.filter(x => !x.srv_ok).length;
+    h += `<div class="sec"><div class="secH">参数核对 —— ${
+      bad ? `<span class="er">${bad} 项异常</span>` : `<span class="ok">全部通过</span>`}</div>
+      <details${bad ? " open" : ""}><summary class="dim">逐字段对照</summary>
+      <table><tr><th>字段</th><th>原</th><th>发</th><th>回</th></tr>` +
+      rep.check.map(x => `<tr>
+        <td class="${x.srv_ok ? "ok" : "er"}">${x.srv_ok ? "✓" : "✗"} ${esc(x.field)}</td>
+        <td class="v">${esc(String(x.original).slice(0, 18))}</td>
+        <td class="v">${esc(String(x.sent).slice(0, 18))}</td>
+        <td class="v">${esc(String(x.returned).slice(0, 18))}</td></tr>`).join("") +
+      `</table></details></div>`;
+  }
+
+  h += `<div class="sec"><div class="secH">文件</div><div class="kv">`;
+  for (const [k, label] of [["png","成图"],["request","请求"],["report","核对"],["original","原始参数"]]){
+    const v = paths[k];
+    h += `<span>${label}</span><b>${v ? esc(v.replace(/^.*[\\/]out[\\/]/, "out/")) : "—"}</b>`;
+  }
+  h += `</div><div class="row">
+    <button class="mini" onclick="copy('${esc(paths.png || "")}')">复制路径</button>
+    <button class="mini" onclick="reveal('${esc(paths.png || "")}')">打开所在目录</button>
+  </div></div>`;
+
+  $("side").innerHTML = h;
+}
+
+function renderPrompt(d){
+  const pr = d.prompts || {};
+  const blk = (label, txt, i) =>
+    `<div class="pblock"><b>${esc(label)}
+      <button class="mini" onclick="copy(pTexts[${i}])">复制</button></b>
+      <pre>${esc(txt || "")}</pre></div>`;
+  const pTexts = [];
+  const reg = s => (pTexts.push(s || ""), pTexts.length - 1);
+  let h = `<div class="sec"><div class="secH">提示词</div>`;
+  h += (() => { const i = reg(pr.pos_base); return blk("基础提示词", pr.pos_base, i); })();
+  (pr.pos_chars || []).forEach((c, i) => {
+    const k = reg(c.char_caption);
+    h += blk("角色提示词 " + (i + 1), c.char_caption, k) +
+      (c.centers ? `<div class="dim">坐标 ${esc(JSON.stringify(c.centers))}</div>` : "");
+  });
+  h += (() => { const i = reg(pr.neg_base); return blk("负面基础", pr.neg_base, i); })();
+  (pr.neg_chars || []).forEach((c, i) => {
+    const k = reg(c.char_caption);
+    h += blk("负面角色 " + (i + 1), c.char_caption, k);
+  });
+  h += `</div>`;
+  window.pTexts = pTexts;
+  $("side").innerHTML = h;
+}
+
+function renderLLM(d){
+  const llm = d.llm || {};
+  const modes = Object.keys(llm);
+  if (!modes.length){
+    $("side").innerHTML = `<div class="dim" style="padding:24px 0;text-align:center">
+      这张还没有 LLM 分析结果。<br>在 NAI 复现工具里跑「LLM 分析」后会出现在这里。</div>`;
+    return;
+  }
+  let h = "";
+  const rTexts = [];          // 所有模式的可复用片段共用一张表，下标全局唯一
+  for (const m of modes){
+    const r = llm[m], o = r.overview || {}, sy = r.structure || {};
+    h += `<div class="sec"><div class="secH">${m === "fast" ? "快速分类" : "完整解读"}
+      <span class="dim">${r.tag_count} 个标签 · 未归类 ${(r.unassigned || []).length}
+      · ${r.cached ? "缓存" : "存档"}</span></div>`;
+    if (o.title) h += `<h3>${esc(o.title)}</h3>`;
+    if (o.summary) h += `<div>${esc(o.summary)}</div>`;
+    const bits = [];
+    for (const [k, label] of [["genre","类型"],["mood","情绪"],["style","风格"],["cast","出场"]])
+      if ((o[k] || []).length) bits.push(`${label}：${o[k].map(esc).join(" / ")}`);
+    if (o.scene) bits.push(`场景：${esc(o.scene)}`);
+    if (bits.length) h += `<div class="dim" style="margin-top:5px">${bits.join("　")}</div>`;
+
+    if (sy.layout){
+      h += `<div style="margin-top:9px"><b style="font-size:12px">结构</b>
+        <span class="dim">${esc(sy.layout)}</span>`;
+      if (sy.notes) h += `<div class="dim">${esc(sy.notes)}</div>`;
+      h += `</div>`;
+    }
+    for (const c of (r.categories ? Object.keys(r.categories) : [])){
+      const arr = r.categories[c];
+      if (!arr || !arr.length) continue;
+      h += `<div style="margin-top:9px"><b style="font-size:12px">${esc(c)}</b>
+        <span class="dim">${arr.length}</span>
+        <div class="chips">${arr.map(t => `<span class="chip">${esc(t)}</span>`).join("")}</div></div>`;
+    }
+    (r.characters || []).forEach(ch => {
+      const id = ch.identity || {};
+      const who = [id.name, id.fandom, id.variant].filter(Boolean).join(" · ");
+      h += `<div class="pblock"><b>角色 ${esc(ch.index)} <span class="dim">${esc(who)}</span></b>`;
+      for (const [f, label] of [["appearance","外貌"],["clothing","服装"],
+                                ["accessories","配饰"],["expression","神态"],["action","动作"]])
+        if ((ch[f] || []).length)
+          h += `<div class="dim">${label}：<span style="color:#c9d1d9">${ch[f].map(esc).join(" · ")}</span></div>`;
+      h += `</div>`;
+    });
+    if ((r.reusable || []).length){
+      h += `<div style="margin-top:9px"><b style="font-size:12px">可复用片段</b>`;
+      r.reusable.forEach(b => {
+        rTexts.push(b.text || "");
+        h += `<div class="pblock"><b>${esc(b.label || "片段")}
+          <button class="mini" onclick="copy(rTexts[${rTexts.length - 1}])">复制</button></b>
+          <pre>${esc(b.text || "")}</pre></div>`;
+      });
+      h += `</div>`;
+    }
+    if ((r.insights || []).length){
+      const icon = {info:"·", warn:"!", question:"?"};
+      const col = {info:"#b9c3cf", warn:"#f0d9a8", question:"#9ec5ff"};
+      h += `<div style="margin-top:9px"><b style="font-size:12px">提示</b>`;
+      r.insights.forEach(i => {
+        h += `<div style="margin-top:5px;font-size:12px;color:${col[i.level] || "#b9c3cf"}">
+          ${icon[i.level] || "·"} ${esc(i.text || "")}</div>`;
+      });
+      h += `</div>`;
+    }
+    h += `</div>`;
+  }
+  window.rTexts = rTexts;
+  $("side").innerHTML = h;
+}
+
+/* ---------------- 灯箱：看全图 ---------------- */
+function listNow(){ return filtered(); }
+
+function openLbox(){
+  if (!detail) return;
+  const list = listNow();
+  let i = list.findIndex(x => x.batch === sel.batch && x.f === sel.f);
+  if (i < 0) i = 0;
+  lbShow(i);
+  $("lbox").classList.add("on");
+}
+function closeLbox(){
+  $("lbox").classList.remove("on");
+  $("lbImg").src = "";
+}
+function lbShow(i){
+  const list = listNow();
+  if (!list.length) return;
+  i = (i + list.length) % list.length;
+  const it = list[i];
+  lbIdx = i;
+  $("lbImg").src = `/img?kind=full&id=${encodeURIComponent(it.batch)}&f=${encodeURIComponent(it.f)}`;
+  $("lbName").textContent = it.f;
+  $("lbInfo").textContent =
+    `${it.work} · seed ${it.seed ?? "?"} · ${(it.bytes/1048576).toFixed(2)} MB · ` +
+    `${i + 1} / ${list.length}`;
+  $("lbStage").classList.remove("actual");
+  $("lbStage").scrollTop = 0;
+  $("lbStage").scrollLeft = 0;
+  const img = $("lbImg");
+  img.onload = () => {
+    $("lbInfo").textContent += ` · ${img.naturalWidth}×${img.naturalHeight}`;
+  };
+}
+let lbIdx = 0;
+function lbStep(n){ lbShow(lbIdx + n); }
+function lbToggleFit(btn){
+  const st = $("lbStage");
+  st.classList.toggle("actual");
+  btn.textContent = st.classList.contains("actual") ? "适应窗口" : "实际尺寸";
+}
+function lbOpenRaw(){
+  const it = listNow()[lbIdx];
+  if (it) window.open(`/img?kind=full&id=${encodeURIComponent(it.batch)}&f=${encodeURIComponent(it.f)}`, "_blank");
+}
+
+/* ---------------- 批次管理 ---------------- */
+let batches = [];
+async function openBatches(){
+  $("mask").classList.add("on");
+  await loadBatches();
+}
+function closeBatches(){ $("mask").classList.remove("on"); }
+
+async function loadBatches(){
+  const r = await fetch("/api/batches");
+  const j = await r.json();
+  batches = j.batches || [];
+  $("bStat").textContent = `${batches.length} 个批次 · 共 ${
+    batches.reduce((a, b) => a + b.image_count, 0)} 张`;
+  let h = `<table class="bt"><tr><th>批次</th><th>内容</th><th>操作</th></tr>`;
+  for (const b of batches){
+    h += `<tr>
+      <td><b>${esc(b.name)}</b><br><span class="dim">${esc(b.created || "")}</span></td>
+      <td>${b.image_count} 张<br><span class="dim">${b.item_count} 条</span></td>
+      <td class="act">
+        <button class="mini" onclick="renameB('${esc(b.id)}')">改名</button>
+        <button class="mini" onclick="viewB('${esc(b.id)}')">只看这批</button>
+        <button class="mini danger" onclick="delB('${esc(b.id)}')">删除</button>
+      </td></tr>`;
+  }
+  h += `</table>
+    <div class="row">
+      <button onclick="autoname()">按作品号重命名</button>
+      <button onclick="autogroup()">合并同作品的批次</button>
+    </div>
+    <div class="dim" style="margin-top:8px">「合并」把同一作品散在多个批次里的图并成一个，
+      文件、清单、请求、报告一起搬，源批次删除。</div>`;
+  $("bBody").innerHTML = h;
+}
+
+function bById(id){ return batches.find(b => b.id === id) || {name: id}; }
+
+async function renameB(id){
+  const name = prompt("新的批次名称", bById(id).name);
+  if (name === null || !name.trim()) return;
+  const j = await post("/api/batches/rename", {id, name: name.trim()});
+  if (!j.ok){ toast(j.error); return; }
+  await loadBatches(); await load(); toast("已改名");
+}
+async function delB(id){
+  const b = bById(id);
+  if (!confirm(`删除批次「${b.name}」？\n连同其中 ${b.image_count} 张图和请求一起删掉，不可恢复。`)) return;
+  const j = await post("/api/batches/delete", {id, confirm: true});
+  if (!j.ok){ toast(j.error); return; }
+  await loadBatches(); await load(); toast("已删除");
+}
+function viewB(id){
+  closeBatches();
+  $("fBatch").value = id;
+  load();
+}
+async function autoname(){
+  if (!confirm("按批次里的作品号重新命名？只改时间戳式的名字，你手改过的不动。")) return;
+  const j = await post("/api/batches/autoname", {});
+  await loadBatches(); await load();
+  toast(`已重命名 ${j.changed.length} 个批次`);
+}
+async function autogroup(){
+  if (!confirm("把同一作品的批次合并成一个？源批次会被删除。")) return;
+  const j = await post("/api/batches/merge", {auto: true});
+  const n = (j.groups || []).reduce((a, g) => a + g.merged, 0);
+  await loadBatches(); await load();
+  toast(n ? `合并了 ${j.groups.length} 组，共并掉 ${n} 个批次` : "没有需要合并的批次");
+}
+
+/* ---------------- 导出 / 其它 ---------------- */
+async function exportSel(){
+  if (!chosen.size){ toast("先用图块右上角的勾选框选几张"); return; }
+  const dest = prompt("导出到哪个目录？（会把选中的成图复制过去，扁平存放）",
+                      "D:\\\\AI project\\export");
+  if (!dest) return;
+  const list = [...chosen].map(k => {
+    const [b, f] = k.split("/");
+    return {batch: b, f};
+  });
+  const j = await post("/api/export", {items: list, dest});
+  toast(j.ok ? `已复制 ${j.copied} 张到 ${j.dest}` : ("失败：" + j.error), 4200);
+}
+async function reveal(p){
+  if (!p){ toast("没有这个文件"); return; }
+  const j = await post("/api/reveal", {path: p});
+  if (!j.ok) toast(j.error);
+}
+
+/* ---------------- 启动 ---------------- */
+(async function(){
+  try{
+    const s = await (await fetch("/api/status")).json();
+    $("srcInfo").textContent = `${s.batches} 个批次 · ${s.images} 张 · ${s.nai_dir}`;
+  }catch(e){ $("srcInfo").textContent = "读不到状态"; }
+  await load();
+})();
+$("q").addEventListener("input", () => renderGrid(false));
+// 窗口变宽变窄时只重排列数，已加载的张数保留
+let rzT = null;
+window.addEventListener("resize", () => {
+  clearTimeout(rzT);
+  rzT = setTimeout(relayout, 220);
+});
+$("mask").addEventListener("click", closeBatches);
+document.addEventListener("keydown", e => {
+  if ($("lbox").classList.contains("on")){
+    if (e.key === "Escape") closeLbox();
+    else if (e.key === "ArrowLeft") lbStep(-1);
+    else if (e.key === "ArrowRight") lbStep(1);
+    else if (e.key === " "){ e.preventDefault(); lbStep(1); }
+    return;
+  }
+  if (e.key === "Escape") closeBatches();
+});
+$("lbox").addEventListener("click", e => {
+  if (e.target.id === "lbox" || e.target.id === "lbStage") closeLbox();
+});
+</script>
+</body>
+</html>

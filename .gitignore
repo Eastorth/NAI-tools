@@ -1,0 +1,42 @@
+# ============================================================
+#  本仓库只跟踪两个项目：
+#    nai_repro/    NAI 复现工具（读取 NAI 作品 JSON，复现出图）
+#    nai_library/  NAI 资源库（浏览 / 查参 / 整理批次）
+#
+#  工作区里其它内容（aitag 抓取脚本、法典数据、_smoke、output、
+#  以及其它项目的文件）一律不提交。
+# ============================================================
+/*
+!/nai_repro/
+!/nai_library/
+!/.gitignore
+
+# ---------- 通用 ----------
+__pycache__/
+*.py[cod]
+*.log
+
+# ---------- NAI 复现工具 ----------
+
+# 批次数据：成图、请求 JSON、核对报告、原始参数。
+# 含成人向作品，且体积大（数百 MB），绝不入库。
+/nai_repro/out/
+
+# 测试用成图样本（真实作品，同样不入库）
+/nai_repro/samples/
+
+# NAI 密钥，绝不入库
+/nai_repro/token.txt
+
+# 本地输入与配置
+/nai_repro/urls.txt
+/nai_repro/prompt_sample.txt
+/nai_repro/llm_config.json
+
+# ---------- 资源库 ----------
+
+# 缩略图缓存，可随时重建
+/nai_library/cache/
+
+# 本地配置（指向本机路径）
+/nai_library/lib_config.json
