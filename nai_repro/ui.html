@@ -298,7 +298,16 @@
       <div class="btns"><button onclick="llmApplyManual()">应用</button></div>
     </details>
     <div class="btns">
-      <button class="primary" onclick="llmAnalyze()">分析选中</button>
+      <button class="primary" id="bLLMAnalyze" onclick="llmAnalyze()">分析选中</button>
+    </div>
+    <!-- LLM 任务是独立的一套计数，不共用上面生成任务的进度条 -->
+    <div id="llmProg" style="display:none">
+      <div class="toolbar" style="margin:6px 0 0">
+        <span class="pill run" id="llmPhase">分析中</span>
+        <div class="bar"><i id="llmBarFill"></i></div>
+        <span class="pill" id="llmCount">0 / 0</span>
+      </div>
+      <div class="hint" id="llmNow">—</div>
     </div>
     <div class="chk"><input type="checkbox" id="llmForce"><label for="llmForce" style="margin:0">强制重跑（忽略缓存）</label></div>
     <div class="hint">单张可在卡片上点「LLM 分析」。已分析过的走缓存。</div>
@@ -455,6 +464,22 @@ function render(){
   $("bParse").disabled = s.running;
   $("bRun").disabled = s.running || !s.order.length;
   $("bStop").disabled = !s.running;
+
+  // LLM 分析进度：和上面的生成进度是两套独立计数，必须单独渲染。
+  // 否则点了「分析选中」之后界面上什么都不会动，看起来像卡死。
+  const L = s.llm || {};
+  const lrun = !!L.running;
+  $("llmProg").style.display = lrun ? "block" : "none";
+  $("bLLMAnalyze").disabled = lrun || !s.order.length;
+  if (lrun){
+    $("llmPhase").textContent = L.phase || "分析中";
+    $("llmCount").textContent = `${L.done || 0} / ${L.total || 0}`;
+    $("llmBarFill").style.width = L.total
+      ? ((L.done || 0) / L.total * 100) + "%" : "0%";
+    $("llmNow").textContent = L.current
+      ? `正在分析：${L.current}（${L.mode === "fast" ? "快速分类" : "完整解读"}）`
+      : "准备中…";
+  }
   $("log").textContent = s.log.join("\n");
   $("log").scrollTop = $("log").scrollHeight;
 
@@ -581,7 +606,9 @@ function card(k, it){
     const L = it.llm;
     body += `<div class="hdr">LLM 分析</div>`;
     if (L.status === "分析中"){
-      body += `<div class="hint">分析中…（约 90 秒）</div>`;
+      const p = llmCurrent();
+      const per = p && p.speed === "快" ? 6 : (p && p.speed === "中" ? 25 : 70);
+      body += `<div class="hint">分析中…（${esc(p ? p.label : "当前模型")} 约 ${per} 秒/张）</div>`;
     } else if (L.status === "失败"){
       body += `<div class="err">${esc(L.error || "分析失败")}</div>`;
     } else if (L.status === "完成" && L.result){
