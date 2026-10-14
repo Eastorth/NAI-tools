@@ -34,6 +34,18 @@ __pycache__/
 /nai_repro/prompt_sample.txt
 /nai_repro/llm_config.json
 
+# 另一个会话在 nai_repro/ 下新增的图像处理脚本与探查脚本。
+# 它们在这个被放行的目录里，不显式排除的话 git add -A 会扫进来。
+# 确认要不要收进仓库之后，把下面几行删掉即可。
+/nai_repro/image_*.py
+/nai_repro/image_config*.json
+/nai_repro/test_image_*.py
+/nai_repro/_probe_check.py
+
+# 工作区里另外两个目录（旧根目录搬迁物 + 模型优化实验）
+/nai_tag/
+/qwen_optimization/
+
 # ---------- 资源库 ----------
 
 # 缩略图缓存，可随时重建
