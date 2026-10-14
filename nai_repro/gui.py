@@ -607,6 +607,57 @@ def compute_common_cached(keys):
 
 # ---------------------------------------------------------------- 解析任务
 
+def cached_analyses(prompts):
+    """把 out/_llm/ 里已经存着的分析读回来，按模式分组。
+
+    LLM 分析结果只活在 STATE.items 里 —— GUI 一重启就全没了。
+    而磁盘上明明存着，用户重新打开界面却什么都看不到。
+    所以解析作品时顺手把已有的读回来。
+    """
+    out = {}
+    try:
+        slots = llm_analyze.slots_from_prompts(prompts)
+        if not slots:
+            return out
+    except Exception:
+        return out
+    cfg = dict(STATE.llm_cfg)
+    for mode in ("full", "fast"):
+        try:
+            cp = llm_analyze.cache_path(slots, cfg, mode)
+            if os.path.isfile(cp):
+                with open(cp, encoding="utf-8") as f:
+                    r = json.load(f)
+                if isinstance(r, dict) and r.get("ok"):
+                    r["cached"] = True
+                    out[mode] = r
+        except Exception:
+            pass
+    return out
+
+
+def attach_cached_llm(item, prompts):
+    """给解析出来的作品挂上磁盘里已有的分析（如果有）。"""
+    modes = cached_analyses(prompts)
+    if not modes:
+        return False
+    # 优先用当前设置的模式，没有就退而求其次
+    want = STATE.settings.get("llm_mode") or "full"
+    for m in [want] + [x for x in ("full", "fast") if x != want]:
+        if m in modes:
+            r = modes[m]
+            item["llm"] = {
+                "status": "完成",
+                "result": r,
+                "error": None,
+                "problems": r.get("problems") or [],
+                "at": "磁盘缓存",
+                "restored": True,
+            }
+            return True
+    return False
+
+
 def job_parse(sources):
     with STATE.lock:
         STATE.running = True
@@ -651,6 +702,9 @@ def job_parse(sources):
             pr = prompts_of(orig)
             item["prompts"] = pr
             item["edited"] = False
+            # 磁盘上已有分析就直接挂上，省得重启后界面一片空白
+            if attach_cached_llm(item, pr):
+                STATE.say(f"  {name} 有已存的分析结果，直接载入")
             with STATE.lock:
                 STATE.raw[k] = orig
                 STATE.orig_prompts[k] = copy.deepcopy(pr)
