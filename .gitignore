@@ -10,6 +10,7 @@
 !/nai_repro/
 !/nai_library/
 !/.gitignore
+!/README.md
 
 # ---------- 通用 ----------
 __pycache__/
